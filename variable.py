@@ -1,5 +1,6 @@
 from util import dismantled_variable_re
 from fractions import Fraction
+from sympy import Symbol
 
 
 class Variable:
@@ -89,8 +90,7 @@ class ArtificialVariable(Variable):
 
     def __init__(self, coefficient, name, index, *args, **kwargs):
         super().__init__(coefficient, name, index)
-        if coefficient < 0:
-            self.coefficient = '-M'
+        self.coefficient = -Symbol('M')
 
 
 from constraint import Constraint

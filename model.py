@@ -99,14 +99,14 @@ class Model:
         for index, constraint in enumerate(self.constraints):
             if index in self.__basis:
                 continue
-            var = ArtificialVariable(1, var_name, self.highest_variable_index + 1)
+            var = Variable(1, var_name, self.highest_variable_index + 1)
             self.constraints[index] = Constraint(
                 constraint.left + var,
                 '=',
                 constraint.right
             )
             self.__basis[index] = var
-            var = ArtificialVariable(1, var_name, self.highest_variable_index + 1)
+            var = Variable(1, var_name, self.highest_variable_index + 1)
             self.variable_constraints.append(var >= 0.)
             var = ArtificialVariable(-1, var_name, self.highest_variable_index + 1)
             self.target += var
