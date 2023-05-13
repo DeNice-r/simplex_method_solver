@@ -121,10 +121,7 @@ class Model:
         self.__add_artificial_basis()
 
     def __get_delta(self):
-        delta = Expression()
-        for index, constraint in enumerate(self.constraints):
-            delta += self.target.variables[index] * constraint.right
-        return delta - self.target
+        pass
 
     @property
     def status(self) -> Status:
