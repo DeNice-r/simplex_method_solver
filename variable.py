@@ -75,7 +75,7 @@ class Variable:
         return Constraint(self, '<=', other)
 
     def __eq__(self, other):
-        return Constraint(self, '==', other)
+        return Constraint(self, '=', other)
 
     def __ge__(self, other):
         return Constraint(self, '>=', other)
