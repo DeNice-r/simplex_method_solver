@@ -27,6 +27,9 @@ class Variable:
     def __repr__(self):
         return self.__str__()
 
+    def coefless(self):
+        return f'{self.name}{self.index}'
+
     def __add__(self, other):
         from expression import Expression
         if isinstance(other, int | float):

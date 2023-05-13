@@ -1,8 +1,11 @@
+import copy
 from typing import Dict, List
+import sympy
 from constraint import Constraint
 from expression import Expression
 from util import variable_re, sign_re, Sign, LpType, Status
 from variable import Variable, ArtificialVariable
+from fractions import Fraction
 
 
 # TODO: Implement conversion to canonical form
@@ -13,7 +16,7 @@ class Model:
     variable_constraints: List[Expression]
     highest_variable_index: int
     __basis: Dict[int, Variable]
-    status = Status.UNSOLVED
+    deltas: List[Fraction]
 
     def __init__(
             self,
@@ -24,6 +27,7 @@ class Model:
             ):
         super().__init__()
         self.lptype = lptype
+        self.initial_target = copy.deepcopy(target)
         self.target = target
         self.constraints = constraints
         self.variable_constraints = variable_constraints
@@ -51,6 +55,12 @@ class Model:
                 constraints.append(Constraint.from_string(x))
 
         return cls(lptype, target, constraints, variable_constraints)
+
+    def __add_missing_variables(self):
+        for constraint in self.constraints:
+            for variable in self.target.variables:
+                if constraint.left.get_coefficient(variable) is None:
+                    constraint.left += Variable(0, variable.name, variable.index)
 
     def __convert_constraints_to_equations(self):
         for index, constraint in enumerate(self.constraints):
@@ -119,23 +129,89 @@ class Model:
         self.__search_for_basis()
         # If we don't have basis for each constraint, we need to add artificial variables, where appropriate
         self.__add_artificial_basis()
+        # Add variables to constraints with 0 coefficient where they are missing
+        self.__add_missing_variables()
 
-    def __get_delta(self):
-        pass
+    def __update_delta(self) -> None:
+        self.deltas = []
+        M = sympy.Symbol('M')
+        for var in self.target.variables:
+            s = 0
+            for index, constraint in enumerate(self.constraints):
+                s += constraint.left.get_coefficient(var) * self.target.get_coefficient(self.__basis[index])
+            delta = (s - var.coefficient)
+            if not isinstance(delta, int | float | Fraction):
+                delta = delta.subs(M, 10**12)
+            self.deltas.append(delta)
 
     @property
     def status(self) -> Status:
-        # TODO: Implement status checking
+        self.__update_delta()
+        if all([x >= 0 for x in self.deltas]):
+            return Status.OPTIMAL
+
         return Status.UNSOLVED
+
+    def __choose_column(self) -> int:
+        return self.deltas.index(min(self.deltas))
+
+    def __get_ratio(self, row_index: int, column_index: int) -> Fraction | str:
+        xB = self.constraints[row_index].right
+        xr = self.constraints[row_index].left.get_coefficient(self.target.variables[column_index])
+        if xr == 0:
+            return '---'
+
+        return xB / xr
+
+    def __choose_row(self, column_index: int) -> int:
+        mn, mn_index = self.__get_ratio(0, column_index), 0
+        for index in range(1, len(self.constraints)):
+            ratio = self.__get_ratio(index, column_index)
+            if ratio != '---' and ratio < mn:
+                mn, mn_index = ratio, index
+
+        return mn_index
+
+    def __get_pivot(self, row_index: int, column_index: int) -> Fraction:
+        return self.constraints[row_index].left.get_coefficient(self.target.variables[column_index])
+
+    def __improve_solution(self):
+        column_index = self.__choose_column()
+        row_index = self.__choose_row(column_index)
+        pivot = self.__get_pivot(row_index, column_index)
+        self.__basis[row_index] = self.target.variables[column_index]
+        self.constraints[row_index] /= pivot
+        for index, constraint in enumerate(self.constraints):
+            if index == row_index:
+                continue
+            self.constraints[index] -= self.constraints[row_index] * constraint.left.get_coefficient(self.target.variables[column_index])
+
+    def __get_function_value(self) -> str:
+        s = 0
+        for index in self.__basis:
+            s += self.target.get_coefficient(self.__basis[index]) * self.constraints[index].right
+        return s
 
     def solve(self):
         # Convert existing model to canonical form
         self.__to_canonical_form()
 
-        # while self.status == Status.UNSOLVED:
-        #     pass
+        # print(self)
 
+        while self.status == Status.UNSOLVED:
+            self.__improve_solution()
 
+        for variable in self.initial_target.variables:
+            found = False
+            for index, basis in enumerate(self.__basis.values()):
+                if variable.coefless() == basis.coefless():
+                    print(f'{variable.coefless()} = {self.constraints[index].right}')
+                    found = True
+                    break
+            if not found:
+                print(f'{variable.coefless()} = 0')
+
+        print(f'F(x) = {self.__get_function_value()}')
 
     def __str__(self):
         return '\n'.join([f'F(x) = {self.target} -> {self.lptype}'] + [str(x) for x in self.constraints] + [''] + [str(x) for x in self.variable_constraints])
