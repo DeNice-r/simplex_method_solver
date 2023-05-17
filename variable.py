@@ -19,7 +19,12 @@ class Variable:
         coefficient_str, name, index = dismantled_variable_re.match(string).groups()
         if coefficient_str in ['+', '-']:
             coefficient_str = coefficient_str + '1'
-        return cls(float(coefficient_str or 1), name, int(index))
+        return cls(Fraction(coefficient_str or 1), name, int(index))
+
+    def evaluate(self, values: dict[str, int | float | Fraction]):
+        if self.coefless() in values:
+            return self.coefficient * values[self.coefless()]
+        return 0
 
     def __str__(self):
         return f'{self.coefficient}{self.name}{self.index}'
@@ -77,8 +82,8 @@ class Variable:
     def __le__(self, other):
         return Constraint(self, '<=', other)
 
-    def __eq__(self, other):
-        return Constraint(self, '=', other)
+    # def __eq__(self, other):
+    #     return Constraint(self, '=', other)
 
     def __ge__(self, other):
         return Constraint(self, '>=', other)

@@ -16,14 +16,15 @@ class Model:
             lptype: LpType,
             target: Expression,
             constraints: List[Constraint],
-            variable_constraints: List[Expression]
+            variable_constraints: List[Constraint]
             ) -> None:
         super().__init__()
         self.lptype: LpType = lptype
         self.initial_target: Expression = copy.deepcopy(target)
         self.target: Expression = target
+        self.initial_constraints: List[Constraint] = copy.deepcopy(constraints)
         self.constraints: List[Constraint] = constraints
-        self.variable_constraints: List[Expression] = variable_constraints
+        self.variable_constraints: List[Constraint] = variable_constraints
         self.highest_variable_index: int = max([x.index for x in self.target.variables])
         self.__basis: Dict[int, Variable] = {}
         self.__deltas: List[Fraction] = []
@@ -133,11 +134,41 @@ class Model:
                 s += constraint.left.get_coefficient(variables) * self.target.get_coefficient(self.__basis[index])
             self.__deltas.append(s - variables.coefficient)
 
-    @property
+    def __get_x_values(self) -> Dict[str, int | float | Fraction]:
+        x_values = {}
+        for variable in self.initial_target.variables:
+            x_values[variable.coefless()] = 0
+            for index in self.__basis:
+                if self.__basis[index].coefless() == variable.coefless():
+                    x_values[variable.coefless()] = self.constraints[index].right
+                    break
+        return x_values
+
+    def __is_solution_viable(self) -> bool:
+        viable = True
+        values = self.__get_x_values()
+        for constraint in self.initial_constraints:
+            s = 0
+            for variable in constraint.left.variables:
+                for basis_index in self.__basis:
+                    if self.__basis[basis_index].coefless() == variable.coefless():
+                        s += variable.coefficient * self.constraints[basis_index].right
+                        break
+            viable = viable and constraint.is_satisfied_by(values)
+            if not viable:
+                break
+        if viable:
+            for constraint in self.variable_constraints:
+                viable = viable and constraint.is_satisfied_by(values)
+                if not viable:
+                    break
+
+        return viable
+
     def status(self) -> Status:
         self.__update_delta()
         if all([(x >= 0 if self.lptype is LpType.MAX else x <= 0) for x in self.__deltas]):
-            return Status.OPTIMAL
+            return Status.OPTIMAL if self.__is_solution_viable() else Status.INFEASIBLE
 
         return Status.UNSOLVED
 
@@ -171,7 +202,7 @@ class Model:
         column_index = self.__choose_column()
         row_index = self.__choose_row(column_index)
         pivot = self.__get_pivot(row_index, column_index)
-        print(f'Entering column: {column_index}\nLeaving row: {row_index}\nPivot: {pivot}')
+        # print(f'Entering column: {column_index}\nLeaving row: {row_index}\nPivot: {pivot}')
         self.constraints[row_index] /= pivot
         for index, constraint in enumerate(self.constraints):
             if index == row_index:
@@ -203,24 +234,18 @@ class Model:
         self.__to_canonical_form()
 
         # Improve solution until we reach optimal solution
-        print(self)
-        while self.status == Status.UNSOLVED:
-            print(self)
+        # print(self)
+        while self.status() == Status.UNSOLVED:
+            # print(self)
             self.__improve_solution()
-        print(self)
+        # print(self)
 
         # Print solution (to be removed)
-        for variable in self.initial_target.variables:
-            found = False
-            for index, basis in enumerate(self.__basis.values()):
-                if variable.coefless() == basis.coefless():
-                    print(f'{variable.coefless()} = {self.constraints[index].right}')
-                    found = True
-                    break
-            if not found:
-                print(f'{variable.coefless()} = 0')
-
+        values = self.__get_x_values()
+        for variable in values:
+            print(f'{variable} = {values[variable]}')
         print(f'F(x) = {self.__get_function_value()}')
+        print(f'Status: {self.status()}')
 
     def __str__(self) -> str:
         return '\n'.join([f'F(x) = {self.target} -> {self.lptype}'] + [str(x) for x in self.constraints] + ['']) + ' | '.join([str(x) for x in self.__deltas]) + '\n\n'

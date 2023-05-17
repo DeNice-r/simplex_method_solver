@@ -18,10 +18,9 @@ class Constraint:
         self.left: int | float | Fraction | Variable | Expression = left
         self.sign: Sign = sign
         if isinstance(right, int | float):
-            self.right: Fraction | Variable | Expression = Fraction.from_float(right)
+            self.right: Fraction = Fraction.from_float(right)
         else:
-            self.right: Fraction | Variable | Expression = right
-
+            self.right: Fraction = right
 
     @classmethod
     def from_string(cls, string: str):
@@ -32,6 +31,9 @@ class Constraint:
             sign,
             float(right_str)
         )
+
+    def is_satisfied_by(self, values: dict[str, int | float | Fraction]):
+        return self.sign.compare(self.left.evaluate(values), self.right)
 
     def __add__(self, other: int | float | Fraction):
         new_instance = copy.deepcopy(self)

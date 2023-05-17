@@ -1,8 +1,6 @@
 from fractions import Fraction
 from typing import List
-
-from sympy import Symbol
-
+from artificial_coefficient import ArtificialCoefficient
 from util import variable_re
 
 
@@ -19,6 +17,9 @@ class Expression:
     @classmethod
     def from_string(cls, string: str):
         return cls(*(Variable.from_string(x) for x in variable_re.findall(string)))
+
+    def evaluate(self, values: dict['Variable', int | float | Fraction]):
+        return sum(x.evaluate(values) for x in self.variables)
 
     def __add__(self, other):
         if isinstance(other, Variable):
@@ -56,17 +57,24 @@ class Expression:
     def __repr__(self):
         return self.__str__()
 
-    def get_coefficient(self, variable: 'Variable') -> int | float | Fraction | Symbol | None:
+    def get_coefficient(self, variable: 'Variable') -> int | float | Fraction | ArtificialCoefficient | None:
         for v in self.variables:
             if v.name == variable.name and v.index == variable.index:
                 return v.coefficient
         return None
 
-    def set_coefficient(self, variable: 'Variable', value: int | float | Fraction | Symbol):
+    def set_coefficient(self, variable: 'Variable', value: int | float | Fraction | ArtificialCoefficient):
         for v in self.variables:
             if v.name == variable.name and v.index == variable.index:
                 v.coefficient = value
                 return
+
+    def evaluate(self, values: dict[str, int | float | Fraction]) -> int | float | Fraction:
+        result = 0
+        for v in self.variables:
+            result += v.evaluate(values)
+        return result
+
 
 from variable import Variable
 from constraint import Constraint
