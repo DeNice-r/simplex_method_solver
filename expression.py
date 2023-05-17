@@ -7,7 +7,6 @@ from util import variable_re
 
 
 class Expression:
-    variables: List['Variable']
 
     def __init__(self, *args):
         super().__init__()
@@ -15,7 +14,7 @@ class Expression:
         for x in range(len(values)):
             if not isinstance(values[x], Variable):
                 raise TypeError(f'Expected {type(Variable)} for variable, got {type(values[x])}')
-        self.variables = values
+        self.variables: List[Variable] = values
 
     @classmethod
     def from_string(cls, string: str):

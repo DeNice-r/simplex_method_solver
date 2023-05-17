@@ -1,41 +1,35 @@
 import copy
 from typing import Dict, List
 import sympy
+
+from artificial_coefficient import ArtificialCoefficient
 from constraint import Constraint
 from expression import Expression
 from util import variable_re, sign_re, Sign, LpType, Status
-from variable import Variable, ArtificialVariable
+from variable import Variable
 from fractions import Fraction
 
 
-# TODO: Implement conversion to canonical form
 class Model:
-    lptype: LpType
-    target: Expression
-    constraints: List[Constraint]
-    variable_constraints: List[Expression]
-    highest_variable_index: int
-    __basis: Dict[int, Variable]
-    deltas: List[Fraction]
-
     def __init__(
             self,
             lptype: LpType,
             target: Expression,
             constraints: List[Constraint],
             variable_constraints: List[Expression]
-            ):
+            ) -> None:
         super().__init__()
-        self.lptype = lptype
-        self.initial_target = copy.deepcopy(target)
-        self.target = target
-        self.constraints = constraints
-        self.variable_constraints = variable_constraints
-        self.highest_variable_index = max([x.index for x in self.target.variables])
-        self.__basis = {}
+        self.lptype: LpType = lptype
+        self.initial_target: Expression = copy.deepcopy(target)
+        self.target: Expression = target
+        self.constraints: List[Constraint] = constraints
+        self.variable_constraints: List[Expression] = variable_constraints
+        self.highest_variable_index: int = max([x.index for x in self.target.variables])
+        self.__basis: Dict[int, Variable] = {}
+        self.__deltas: List[Fraction] = []
 
     @classmethod
-    def from_string(cls, string: str):
+    def from_string(cls, string: str) -> 'Model':
         input_lines = string.replace(' ', '').split('\n')
 
         lptype = LpType(input_lines[0][:3].lower())
@@ -56,33 +50,30 @@ class Model:
 
         return cls(lptype, target, constraints, variable_constraints)
 
-    def __add_missing_variables(self):
+    def __add_missing_variables(self) -> None:
         for constraint in self.constraints:
             for variable in self.target.variables:
                 if constraint.left.get_coefficient(variable) is None:
                     constraint.left += Variable(0, variable.name, variable.index)
 
-    def __convert_constraints_to_equations(self):
+    def __convert_constraints_to_equations(self) -> None:
         for index, constraint in enumerate(self.constraints):
-            if constraint.sign == Sign.EQ:
-                continue
-            elif constraint.sign == Sign.LE:
-                coefficient = 1
-            elif constraint.sign == Sign.GE:
-                coefficient = -1
-            var = Variable(coefficient, self.target.variables[0].name, self.highest_variable_index + 1)
+            if constraint.sign == Sign.LE: coefficient = 1
+            elif constraint.sign == Sign.GE: coefficient = -1
+            else: continue
+            variable = Variable(coefficient, self.target.variables[0].name, self.highest_variable_index + 1)
             self.constraints[index] = Constraint(
-                constraint.left + var,
+                constraint.left + variable,
                 '=',
                 constraint.right
             )
-            var = Variable(1, self.target.variables[0].name, self.highest_variable_index + 1)
-            self.variable_constraints.append(var >= 0.)
-            var = Variable(0, self.target.variables[0].name, self.highest_variable_index + 1)
-            self.target += var
+            variable = Variable(1, self.target.variables[0].name, self.highest_variable_index + 1)
+            self.variable_constraints.append(variable >= 0.)
+            variable = Variable(0, self.target.variables[0].name, self.highest_variable_index + 1)
+            self.target += variable
             self.highest_variable_index += 1
 
-    def __search_for_basis(self):
+    def __search_for_basis(self) -> None:
         for index, constraint in enumerate(self.constraints):
             for variable in constraint.left.variables:
                 if variable.coefficient != 1:
@@ -101,7 +92,7 @@ class Model:
                     self.__basis[index] = variable
                     break
 
-    def __add_artificial_basis(self):
+    def __add_artificial_basis(self) -> None:
         if len(self.__basis) == len(self.constraints):
             return
 
@@ -109,20 +100,22 @@ class Model:
         for index, constraint in enumerate(self.constraints):
             if index in self.__basis:
                 continue
-            var = Variable(1, var_name, self.highest_variable_index + 1)
+            variable = Variable(1, var_name, self.highest_variable_index + 1)
             self.constraints[index] = Constraint(
-                constraint.left + var,
+                constraint.left + variable,
                 '=',
                 constraint.right
             )
-            self.__basis[index] = var
-            var = Variable(1, var_name, self.highest_variable_index + 1)
-            self.variable_constraints.append(var >= 0.)
-            var = ArtificialVariable(-1, var_name, self.highest_variable_index + 1)
-            self.target += var
+            variable = Variable(1, var_name, self.highest_variable_index + 1)
+            self.variable_constraints.append(variable >= 0.)
+            variable = Variable(ArtificialCoefficient(-1) if self.lptype is LpType.MAX else ArtificialCoefficient(1),
+                           var_name,
+                           self.highest_variable_index + 1)
+            self.target += variable
+            self.__basis[index] = variable
             self.highest_variable_index += 1
 
-    def __to_canonical_form(self):
+    def __to_canonical_form(self) -> None:
         # Convert all constraints to equations
         self.__convert_constraints_to_equations()
         # Try to find basis for each constraint
@@ -133,41 +126,40 @@ class Model:
         self.__add_missing_variables()
 
     def __update_delta(self) -> None:
-        self.deltas = []
-        M = sympy.Symbol('M')
-        for var in self.target.variables:
+        self.__deltas = []
+        for variables in self.target.variables:
             s = 0
             for index, constraint in enumerate(self.constraints):
-                s += constraint.left.get_coefficient(var) * self.target.get_coefficient(self.__basis[index])
-            delta = (s - var.coefficient)
-            if not isinstance(delta, int | float | Fraction):
-                delta = delta.subs(M, 10**12)
-            self.deltas.append(delta)
+                s += constraint.left.get_coefficient(variables) * self.target.get_coefficient(self.__basis[index])
+            self.__deltas.append(s - variables.coefficient)
 
     @property
     def status(self) -> Status:
         self.__update_delta()
-        if all([x >= 0 for x in self.deltas]):
+        if all([(x >= 0 if self.lptype is LpType.MAX else x <= 0) for x in self.__deltas]):
             return Status.OPTIMAL
 
         return Status.UNSOLVED
 
     def __choose_column(self) -> int:
-        return self.deltas.index(min(self.deltas))
+        return self.__deltas.index(min(self.__deltas) if self.lptype is LpType.MAX else max(self.__deltas))
 
-    def __get_ratio(self, row_index: int, column_index: int) -> Fraction | str:
+    def __get_ratio(self, row_index: int, column_index: int) -> Fraction | None:
         xB = self.constraints[row_index].right
         xr = self.constraints[row_index].left.get_coefficient(self.target.variables[column_index])
         if xr == 0:
-            return '---'
+            return None
 
-        return xB / xr
+        ratio = xB / xr
+        if ratio <= 0:
+            return None
+        return ratio
 
     def __choose_row(self, column_index: int) -> int:
-        mn, mn_index = self.__get_ratio(0, column_index), 0
-        for index in range(1, len(self.constraints)):
+        mn, mn_index = None, 0
+        for index in range(0, len(self.constraints)):
             ratio = self.__get_ratio(index, column_index)
-            if ratio != '---' and ratio < mn:
+            if ratio is not None and (mn is None or ratio < mn):
                 mn, mn_index = ratio, index
 
         return mn_index
@@ -175,16 +167,30 @@ class Model:
     def __get_pivot(self, row_index: int, column_index: int) -> Fraction:
         return self.constraints[row_index].left.get_coefficient(self.target.variables[column_index])
 
-    def __improve_solution(self):
+    def __improve_solution(self) -> None:
         column_index = self.__choose_column()
         row_index = self.__choose_row(column_index)
         pivot = self.__get_pivot(row_index, column_index)
-        self.__basis[row_index] = self.target.variables[column_index]
+        print(f'Entering column: {column_index}\nLeaving row: {row_index}\nPivot: {pivot}')
         self.constraints[row_index] /= pivot
         for index, constraint in enumerate(self.constraints):
             if index == row_index:
                 continue
             self.constraints[index] -= self.constraints[row_index] * constraint.left.get_coefficient(self.target.variables[column_index])
+
+        old_basis = self.__basis[row_index]
+        self.__basis[row_index] = self.target.variables[column_index]
+        if isinstance(old_basis.coefficient, ArtificialCoefficient):
+            leaving_index = old_basis.index
+            for index, variable in enumerate(self.target.variables):
+                if variable.index == leaving_index:
+                    self.target.variables.pop(index)
+                    break
+            for constraint in self.constraints:
+                for index, variable in enumerate(constraint.left.variables):
+                    if variable.index == leaving_index:
+                        constraint.left.variables.pop(index)
+                        break
 
     def __get_function_value(self) -> str:
         s = 0
@@ -192,15 +198,18 @@ class Model:
             s += self.target.get_coefficient(self.__basis[index]) * self.constraints[index].right
         return s
 
-    def solve(self):
+    def solve(self) -> None:
         # Convert existing model to canonical form
         self.__to_canonical_form()
 
-        # print(self)
-
+        # Improve solution until we reach optimal solution
+        print(self)
         while self.status == Status.UNSOLVED:
+            print(self)
             self.__improve_solution()
+        print(self)
 
+        # Print solution (to be removed)
         for variable in self.initial_target.variables:
             found = False
             for index, basis in enumerate(self.__basis.values()):
@@ -213,8 +222,9 @@ class Model:
 
         print(f'F(x) = {self.__get_function_value()}')
 
-    def __str__(self):
-        return '\n'.join([f'F(x) = {self.target} -> {self.lptype}'] + [str(x) for x in self.constraints] + [''] + [str(x) for x in self.variable_constraints])
+    def __str__(self) -> str:
+        return '\n'.join([f'F(x) = {self.target} -> {self.lptype}'] + [str(x) for x in self.constraints] + ['']) + ' | '.join([str(x) for x in self.__deltas]) + '\n\n'
+        # [str(x) for x in self.variable_constraints])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()

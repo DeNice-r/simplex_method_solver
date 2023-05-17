@@ -1,18 +1,18 @@
 from util import dismantled_variable_re
 from fractions import Fraction
-from sympy import Symbol
+from copy import deepcopy
+from artificial_coefficient import ArtificialCoefficient
 
 
 class Variable:
-    name: str
-    index: int
-    coefficient: Fraction
-
     def __init__(self, coefficient, name, index, *args, **kwargs):
         super().__init__()
-        self.coefficient = Fraction.from_float(coefficient)
-        self.name = name
-        self.index = index
+        if isinstance(coefficient, int | float):
+            self.coefficient: Fraction | ArtificialCoefficient = Fraction.from_float(coefficient)
+        elif isinstance(coefficient, Fraction | ArtificialCoefficient):
+            self.coefficient: Fraction | ArtificialCoefficient = coefficient
+        self.name: str = name
+        self.index: int = index
 
     @classmethod
     def from_string(cls, string: str):
@@ -33,25 +33,25 @@ class Variable:
     def __add__(self, other):
         from expression import Expression
         if isinstance(other, int | float):
-            new_instance = self.copy()
+            new_instance = deepcopy(self)
             new_instance.coefficient += other
             return new_instance
         elif isinstance(other, Variable):
             if self.name == other.name:
-                new_instance = self.copy()
+                new_instance = deepcopy(self)
                 new_instance.coefficient += other.coefficient
                 return new_instance
             else:
                 return Expression(self, other)
 
     def __mul__(self, other):
+        new_instance = deepcopy(self)
         if isinstance(other, int | float):
-            new_instance = self.copy()
             new_instance.coefficient *= other
             return new_instance
         elif isinstance(other, Variable):
             if self.name == other.name:
-                new_instance = self.copy()
+                new_instance = deepcopy(self)
                 new_instance.coefficient *= other.coefficient
                 return new_instance
             else:
@@ -84,16 +84,9 @@ class Variable:
         return Constraint(self, '>=', other)
 
     def __neg__(self):
-        new_instance = self.copy()
+        new_instance = deepcopy(self)
         new_instance.coefficient = -new_instance.coefficient
         return new_instance
-
-
-class ArtificialVariable(Variable):
-
-    def __init__(self, coefficient, name, index, *args, **kwargs):
-        super().__init__(coefficient, name, index)
-        self.coefficient = -Symbol('M')
 
 
 from constraint import Constraint

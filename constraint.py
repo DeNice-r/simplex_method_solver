@@ -5,12 +5,8 @@ from util import sign_re, Sign
 
 
 class Constraint:
-    left: int | float
-    sign: Sign
-    right: Fraction
-
     def __init__(
-            self, left: int | float,
+            self, left,
             sign: Sign | str,
             right: int | float | Fraction
             ):
@@ -19,12 +15,12 @@ class Constraint:
             sign = Sign(sign)
         elif not isinstance(sign, Sign):
             raise TypeError(f'Expected {type(Sign)} or {type(str)} for sign argument, got {type(sign)}')
-        self.left = left
-        self.sign = sign
+        self.left: int | float | Fraction | Variable | Expression = left
+        self.sign: Sign = sign
         if isinstance(right, int | float):
-            self.right = Fraction.from_float(right)
+            self.right: Fraction | Variable | Expression = Fraction.from_float(right)
         else:
-            self.right = right
+            self.right: Fraction | Variable | Expression = right
 
 
     @classmethod
