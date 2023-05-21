@@ -9,7 +9,7 @@ x7 + x8 + x9 <= 280
 30x1 + 20x4 + 60x7 = 6000
 20x2 + 30x5 + 40x8 = 50000
 40x3 + 50x6 + 20x9 = 8000
-x1,x2,x3,x4,x5,x6,x7,x8,x9 >= 0'''
+and x1,x2,x3,x4,x5,x6,x7,x8,x9 >= 0'''
 model = Model.from_string(input_string)
 model.solve()
 print('-' * 80)
@@ -22,7 +22,7 @@ x7 + x8 + x9 <= 280
 30x1 + 20x4 + 60x7 = 6000
 20x2 + 30x5 + 40x8 = 11200
 40x3 + 50x6 + 20x9 = 8000
-x1,x2,x3,x4,x5,x6,x7,x8,x9 >= 0'''
+and x1,x2,x3,x4,x5,x6,x7,x8,x9 >= 0'''
 model = Model.from_string(input_string)
 model.solve()
 print('-' * 80)
@@ -31,7 +31,7 @@ input_string = \
     '''MAX Z = 1x1 + 1x2
 1/600x1 + 1/1200x2 <= 1
 1/1200x1 + 1/800x2 <= 1
-x1, x2 >= 0'''
+and x1, x2 >= 0'''
 model = Model.from_string(input_string)
 model.solve()
 print('-' * 80)
@@ -42,7 +42,7 @@ input_string = \
 40x1 + 20x2 + 60x3 + 35x4 + 25x5 <= 4500
 x1 + x2 + x3 + x4 + x5 = 100
 x2 >= 10
-x1,x2,x3,x4,x5 >= 0'''
+and x1,x2,x3,x4,x5 >= 0'''
 model = Model.from_string(input_string)
 model.solve()
 print('-' * 80)
@@ -51,6 +51,6 @@ input_string = \
     '''MAX Z = 8x1 + 6x2
 2x1 + 5x2 <= 11
 4x1 + x2 <= 10
-x1,x2 >= 0'''
+and x1, x2 non-negative integers'''
 model = Model.from_string(input_string)
 model.solve()

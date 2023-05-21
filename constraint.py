@@ -1,6 +1,5 @@
 import copy
 from fractions import Fraction
-
 from util import sign_re, Sign
 
 

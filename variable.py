@@ -1,3 +1,5 @@
+from typing import List
+
 from util import dismantled_variable_re
 from fractions import Fraction
 from copy import deepcopy
@@ -5,7 +7,7 @@ from artificial_coefficient import ArtificialCoefficient
 
 
 class Variable:
-    def __init__(self, coefficient, name, index, *args, **kwargs):
+    def __init__(self, coefficient, name, index):
         super().__init__()
         if isinstance(coefficient, int | float):
             self.coefficient: Fraction | ArtificialCoefficient = Fraction.from_float(coefficient)
@@ -20,6 +22,10 @@ class Variable:
         if coefficient_str in ['+', '-']:
             coefficient_str = coefficient_str + '1'
         return cls(Fraction(coefficient_str or 1), name, int(index))
+
+    @classmethod
+    def create_many(cls, coefficients: List[int | float | Fraction], name: str, index: int):
+        return [cls(coefficient, name, index) for coefficient in coefficients]
 
     def evaluate(self, values: dict[str, int | float | Fraction]):
         if self.coefless() in values:

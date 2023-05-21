@@ -52,7 +52,11 @@ class Expression:
 
     def __str__(self):
         a: int = 1
-        return ' + '.join([str(v) for v in self.variables])
+        s = ''
+        for v in self.variables:
+            s += f'{str(v.coefficient):^10}'
+        return s
+        # return ' + '.join([str(v) for v in self.variables])
 
     def __repr__(self):
         return self.__str__()

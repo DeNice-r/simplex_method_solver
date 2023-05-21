@@ -1,11 +1,10 @@
 import copy
 from typing import Dict, List
-import sympy
-
+from math import isclose
 from artificial_coefficient import ArtificialCoefficient
 from constraint import Constraint
 from expression import Expression
-from util import variable_re, sign_re, Sign, LpType, Status
+from util import variable_re, sign_re, Sign, LpType, Status, get_fractional_part
 from variable import Variable
 from fractions import Fraction
 
@@ -16,8 +15,9 @@ class Model:
             lptype: LpType,
             target: Expression,
             constraints: List[Constraint],
-            variable_constraints: List[Constraint]
-            ) -> None:
+            variable_constraints: List[Constraint],
+            positive_integer_variables: List[Variable]
+    ) -> None:
         super().__init__()
         self.lptype: LpType = lptype
         self.initial_target: Expression = copy.deepcopy(target)
@@ -25,9 +25,11 @@ class Model:
         self.initial_constraints: List[Constraint] = copy.deepcopy(constraints)
         self.constraints: List[Constraint] = constraints
         self.variable_constraints: List[Constraint] = variable_constraints
-        self.highest_variable_index: int = max([x.index for x in self.target.variables])
+        self.positive_integer_variables: List[Variable] = positive_integer_variables
+        self.__highest_variable_index: int = max([x.index for x in self.target.variables])
         self.__basis: Dict[int, Variable] = {}
-        self.__deltas: List[Fraction] = []
+        self.__gomory_variables: List[Variable] = []
+
 
     @classmethod
     def from_string(cls, string: str) -> 'Model':
@@ -38,18 +40,33 @@ class Model:
 
         constraints = []
         variable_constraints = []
+        positive_integer_variables = []
 
-        for x in input_lines[1:]:
-            if ',' in x:
-                sign = sign_re.search(x).group()
-                left_str, right_str = sign_re.split(input_lines[-1])
-                left_values: List[str] = variable_re.findall(left_str)
-                for value in left_values:
-                    variable_constraints.append(Constraint.from_string(f'{value}{sign}{right_str}'))
-            else:
-                constraints.append(Constraint.from_string(x))
+        for x in input_lines[1:-1]:
+            constraints.append(Constraint.from_string(x))
 
-        return cls(lptype, target, constraints, variable_constraints)
+        conditions_str = input_lines[-1][3:]
+        if 'and' in conditions_str:
+            variable_constraints_str, positive_integer_variables_str = conditions_str.split('and')
+        elif 'non-negativeintegers' in conditions_str:
+            variable_constraints_str = ''
+            positive_integer_variables_str = conditions_str
+        else:
+            variable_constraints_str = conditions_str
+            positive_integer_variables_str = ''
+
+        if variable_constraints_str:
+            sign = sign_re.search(variable_constraints_str).group()
+            left_str, right_str = sign_re.split(variable_constraints_str)
+            left_values: List[str] = variable_re.findall(left_str)
+            for value in left_values:
+                variable_constraints.append(Constraint.from_string(f'{value}{sign}{right_str}'))
+
+        if positive_integer_variables_str:
+            for variable_str in variable_re.findall(positive_integer_variables_str.replace('non-negativeintegers', '')):
+                positive_integer_variables.append(Variable.from_string(variable_str))
+
+        return cls(lptype, target, constraints, variable_constraints, positive_integer_variables)
 
     def __add_missing_variables(self) -> None:
         for constraint in self.constraints:
@@ -57,25 +74,29 @@ class Model:
                 if constraint.left.get_coefficient(variable) is None:
                     constraint.left += Variable(0, variable.name, variable.index)
 
+    def __introduce_variable(self, coefficients: List[int | float | Fraction], name, constraint_index) -> None:
+        index = self.__highest_variable_index + 1
+        variables = Variable.create_many(coefficients, name, index)
+        constraint = self.constraints[constraint_index]
+        self.constraints[constraint_index] = Constraint(constraint.left + variables[0], '=', constraint.right)
+        self.variable_constraints.append(variables[1] >= 0.)
+        self.target += variables[2]
+        self.__highest_variable_index += 1
+
     def __convert_constraints_to_equations(self) -> None:
         for index, constraint in enumerate(self.constraints):
-            if constraint.sign == Sign.LE: coefficient = 1
-            elif constraint.sign == Sign.GE: coefficient = -1
-            else: continue
-            variable = Variable(coefficient, self.target.variables[0].name, self.highest_variable_index + 1)
-            self.constraints[index] = Constraint(
-                constraint.left + variable,
-                '=',
-                constraint.right
-            )
-            variable = Variable(1, self.target.variables[0].name, self.highest_variable_index + 1)
-            self.variable_constraints.append(variable >= 0.)
-            variable = Variable(0, self.target.variables[0].name, self.highest_variable_index + 1)
-            self.target += variable
-            self.highest_variable_index += 1
+            if constraint.sign == Sign.LE:
+                coefficient = 1
+            elif constraint.sign == Sign.GE:
+                coefficient = -1
+            else:
+                continue
+            self.__introduce_variable([coefficient, 1, 0], self.target.variables[0].name, index)
 
     def __search_for_basis(self) -> None:
         for index, constraint in enumerate(self.constraints):
+            if index in self.__basis:
+                continue
             for variable in constraint.left.variables:
                 if variable.coefficient != 1:
                     continue
@@ -101,20 +122,9 @@ class Model:
         for index, constraint in enumerate(self.constraints):
             if index in self.__basis:
                 continue
-            variable = Variable(1, var_name, self.highest_variable_index + 1)
-            self.constraints[index] = Constraint(
-                constraint.left + variable,
-                '=',
-                constraint.right
-            )
-            variable = Variable(1, var_name, self.highest_variable_index + 1)
-            self.variable_constraints.append(variable >= 0.)
-            variable = Variable(ArtificialCoefficient(-1) if self.lptype is LpType.MAX else ArtificialCoefficient(1),
-                           var_name,
-                           self.highest_variable_index + 1)
-            self.target += variable
-            self.__basis[index] = variable
-            self.highest_variable_index += 1
+
+            target_coefficient = ArtificialCoefficient(-1) if self.lptype is LpType.MAX else ArtificialCoefficient(1)
+            self.__introduce_variable([1, 1, target_coefficient], var_name, index)
 
     def __to_canonical_form(self) -> None:
         # Convert all constraints to equations
@@ -123,16 +133,20 @@ class Model:
         self.__search_for_basis()
         # If we don't have basis for each constraint, we need to add artificial variables, where appropriate
         self.__add_artificial_basis()
+        self.__search_for_basis()
         # Add variables to constraints with 0 coefficient where they are missing
         self.__add_missing_variables()
 
-    def __update_delta(self) -> None:
-        self.__deltas = []
+    def __get_deltas(self) -> List[Fraction]:
+        if self.__get_function_value() == 24:
+            pass
+        deltas = []
         for variables in self.target.variables:
             s = 0
             for index, constraint in enumerate(self.constraints):
                 s += constraint.left.get_coefficient(variables) * self.target.get_coefficient(self.__basis[index])
-            self.__deltas.append(s - variables.coefficient)
+            deltas.append(s - variables.coefficient)
+        return deltas
 
     def __get_x_values(self) -> Dict[str, int | float | Fraction]:
         x_values = {}
@@ -143,6 +157,16 @@ class Model:
                     x_values[variable.coefless()] = self.constraints[index].right
                     break
         return x_values
+
+    def __get_integer_status(self) -> Status:
+        if not self.positive_integer_variables:
+            return Status.OPTIMAL
+        values = self.__get_x_values()
+        for variable in self.positive_integer_variables:
+            value = values[variable.coefless()]
+            if not (value >= 0 and isclose(value, int(value))):
+                return Status.UNSOLVED
+        return Status.OPTIMAL
 
     def __is_solution_viable(self) -> bool:
         viable = True
@@ -165,15 +189,16 @@ class Model:
 
         return viable
 
-    def status(self) -> Status:
-        self.__update_delta()
-        if all([(x >= 0 if self.lptype is LpType.MAX else x <= 0) for x in self.__deltas]):
+    def get_status(self) -> Status:
+        deltas = self.__get_deltas()
+        if all([(x >= 0 if self.lptype is LpType.MAX else x <= 0) for x in deltas]):
             return Status.OPTIMAL if self.__is_solution_viable() else Status.INFEASIBLE
 
         return Status.UNSOLVED
 
     def __choose_column(self) -> int:
-        return self.__deltas.index(min(self.__deltas) if self.lptype is LpType.MAX else max(self.__deltas))
+        deltas = self.__get_deltas()
+        return deltas.index(min(deltas) if self.lptype is LpType.MAX else max(deltas))
 
     def __get_ratio(self, row_index: int, column_index: int) -> Fraction | None:
         xB = self.constraints[row_index].right
@@ -187,7 +212,7 @@ class Model:
         return ratio
 
     def __choose_row(self, column_index: int) -> int:
-        mn, mn_index = None, 0
+        mn, mn_index = None, None
         for index in range(0, len(self.constraints)):
             ratio = self.__get_ratio(index, column_index)
             if ratio is not None and (mn is None or ratio < mn):
@@ -198,16 +223,15 @@ class Model:
     def __get_pivot(self, row_index: int, column_index: int) -> Fraction:
         return self.constraints[row_index].left.get_coefficient(self.target.variables[column_index])
 
-    def __improve_solution(self) -> None:
-        column_index = self.__choose_column()
-        row_index = self.__choose_row(column_index)
+    def __recalculate_solution(self, row_index: int, column_index: int) -> None:
         pivot = self.__get_pivot(row_index, column_index)
-        # print(f'Entering column: {column_index}\nLeaving row: {row_index}\nPivot: {pivot}')
+        # print(f"Pivot[{row_index}; {column_index}]: {pivot}")
         self.constraints[row_index] /= pivot
         for index, constraint in enumerate(self.constraints):
             if index == row_index:
                 continue
-            self.constraints[index] -= self.constraints[row_index] * constraint.left.get_coefficient(self.target.variables[column_index])
+            self.constraints[index] -= self.constraints[row_index] * constraint.left.get_coefficient(
+                self.target.variables[column_index])
 
         old_basis = self.__basis[row_index]
         self.__basis[row_index] = self.target.variables[column_index]
@@ -223,11 +247,99 @@ class Model:
                         constraint.left.variables.pop(index)
                         break
 
-    def __get_function_value(self) -> str:
+    def __improve_solution(self) -> None:
+        column_index = self.__choose_column()
+        row_index = self.__choose_row(column_index)
+        self.__recalculate_solution(row_index, column_index)
+
+    def __get_function_value(self) -> int | float | Fraction | ArtificialCoefficient:
         s = 0
         for index in self.__basis:
             s += self.target.get_coefficient(self.__basis[index]) * self.constraints[index].right
         return s
+
+    def __get_gomory_deltas(self) -> List[int | float | Fraction | None]:
+        deltas = self.__get_deltas()
+        # print(self)
+        if deltas == [Fraction(0, 1), Fraction(0, 1), Fraction(0, 1), Fraction(0, 1), Fraction(0, 1), Fraction(2, 1)]:
+            pass
+        gomory_applicable_row = None
+        for index, constraint in enumerate(self.constraints):
+            if constraint.right <= 0 and (gomory_applicable_row is None or self.constraints[gomory_applicable_row].right > constraint.right):
+                if constraint.right == 0 and self.__basis[index].coefless() in [x.coefless() for x in self.__gomory_variables]:
+                    continue
+
+                gomory_applicable_row = index
+        if not gomory_applicable_row:
+            return [None for _ in deltas]
+        for index, variable in enumerate(self.constraints[gomory_applicable_row].left.variables):
+            if variable.coefficient < 0:
+                deltas[index] /= variable.coefficient
+            else:
+                deltas[index] = None
+        return deltas
+
+    def __gomory_choose_column(self) -> int:
+        deltas = self.__get_gomory_deltas()
+        if deltas == [None, None, Fraction(-4, 1), Fraction(-7, 4), None]:
+            pass
+
+        # print(f'Gomory choose column: {deltas}')
+
+        extr, extr_index = None, None
+
+        if self.lptype is LpType.MAX:  # TODO: check if it's correct (suggested by copilot)
+            for index, delta in enumerate(deltas):
+                if delta is not None and (extr is None or delta > extr):
+                    extr = delta
+                    extr_index = index
+        else:
+            for index, delta in enumerate(deltas):
+                if delta is not None and (extr is None or delta < extr):
+                    extr = delta
+                    extr_index = index
+
+        return extr_index
+
+    def __gomory_choose_row(self, column=None) -> int:
+        mn_index = None
+        for index in self.__basis:
+            if self.constraints[index].right <= 0 and (mn_index is None or self.constraints[index].right < self.constraints[mn_index].right):
+                mn_index = index
+
+        return mn_index
+
+    def __gomory_cut(self) -> None:
+        cut_row = None
+        for index, variable in self.__basis.items():
+            if variable.coefless() not in [x.coefless() for x in self.initial_target.variables] or get_fractional_part(self.constraints[index].right) == 1:
+                continue
+            if (cut_row is None or get_fractional_part(self.constraints[cut_row].right) <  # variable.coefless() in [x.coefless() for x in self.positive_integer_variables] and \
+                     get_fractional_part(self.constraints[index].right)):
+                cut_row = index
+
+        # print(f'Gomory cut on {self.__basis[cut_row]}')
+
+        self.constraints.append(Constraint(Expression(), Sign.EQ, -get_fractional_part(self.constraints[cut_row].right)))
+        for variable in self.constraints[cut_row].left.variables:
+            if variable.coefless() == self.__basis[cut_row].coefless():
+                # Add new variable
+                self.__introduce_variable([get_fractional_part(variable.coefficient), 1, 0], variable.name,
+                                          len(self.constraints) - 1)
+                self.__gomory_variables.append(self.target.variables[-1])
+                continue
+            self.constraints[-1].left.variables.append(Variable(-get_fractional_part(variable.coefficient), variable.name, variable.index))
+
+        self.__search_for_basis()
+        self.__add_missing_variables()
+
+        self.__choose_column = self.__gomory_choose_column
+        self.__choose_row = self.__gomory_choose_row
+
+        row_index = self.__choose_row()
+        column_index = self.__choose_column()
+        # print(self)
+        self.__recalculate_solution(row_index, column_index)
 
     def solve(self) -> None:
         # Convert existing model to canonical form
@@ -235,20 +347,28 @@ class Model:
 
         # Improve solution until we reach optimal solution
         # print(self)
-        while self.status() == Status.UNSOLVED:
-            # print(self)
+        while self.get_status() is Status.UNSOLVED:
             self.__improve_solution()
-        # print(self)
+            # print(self)
+            # print(f'F(x) = {self.__get_function_value()}')
+
+        while self.get_status() is Status.OPTIMAL and self.__get_integer_status() is Status.UNSOLVED:
+            self.__gomory_cut()
+
+            while any([x is not None for x in self.__get_gomory_deltas()]):
+                self.__improve_solution()
 
         # Print solution (to be removed)
         values = self.__get_x_values()
         for variable in values:
             print(f'{variable} = {values[variable]}')
         print(f'F(x) = {self.__get_function_value()}')
-        print(f'Status: {self.status()}')
+        print(f'Status: {self.get_status()}')
 
     def __str__(self) -> str:
-        return '\n'.join([f'F(x) = {self.target} -> {self.lptype}'] + [str(x) for x in self.constraints] + ['']) + ' | '.join([str(x) for x in self.__deltas]) + '\n\n'
+        return '\n'.join(
+            [f'F(x) = {self.target} -> {self.lptype}'] + [str(x) for x in self.constraints] + ['']) + ' | '.join(
+            [str(x) for x in self.__get_deltas()]) + '\n\n'
         # [str(x) for x in self.variable_constraints])
 
     def __repr__(self) -> str:

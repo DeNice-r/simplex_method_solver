@@ -1,5 +1,8 @@
+import math
 import re
 from enum import Enum
+from fractions import Fraction
+
 
 variable_re = re.compile(r'([-|+]?\d*[/\\]*\d*[A-ZА-ЯІЇЄЙҐ]+\d+)', re.UNICODE | re.IGNORECASE)
 dismantled_variable_re = re.compile(r'([-|+]?\d*[/\\]*\d*)([A-ZА-ЯІЇЄЙҐ]+)(\d+)', re.UNICODE | re.IGNORECASE)
@@ -41,3 +44,11 @@ class Status(Enum):
 
     def __str__(self):
         return self.value
+
+
+def get_fractional_part(number: int | float | Fraction):
+    if number < 0:
+        return number + math.ceil(abs(number))
+    elif number == 1:
+        return 1
+    return number - int(number)
