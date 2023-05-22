@@ -27,18 +27,18 @@ class Variable:
     def create_many(cls, coefficients: List[int | float | Fraction], name: str, index: int):
         return [cls(coefficient, name, index) for coefficient in coefficients]
 
-    def evaluate(self, values: dict[str, int | float | Fraction]):
+    def evaluate(self, values: dict[str, int | float | Fraction]) -> int | float | Fraction:
         if self.coefless() in values:
             return self.coefficient * values[self.coefless()]
         return 0
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'{self.coefficient}{self.name}{self.index}'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
-    def coefless(self):
+    def coefless(self) -> str:
         return f'{self.name}{self.index}'
 
     def __add__(self, other):
@@ -87,9 +87,6 @@ class Variable:
 
     def __le__(self, other):
         return Constraint(self, '<=', other)
-
-    # def __eq__(self, other):
-    #     return Constraint(self, '=', other)
 
     def __ge__(self, other):
         return Constraint(self, '>=', other)

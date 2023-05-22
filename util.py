@@ -24,7 +24,7 @@ class Sign(Enum):
         else:
             raise ValueError(f'Unknown sign {self}')
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
 
@@ -42,11 +42,11 @@ class Status(Enum):
     INFEASIBLE = 'infeasible'
     UNDEFINED = 'undefined'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
 
-def get_fractional_part(number: int | float | Fraction):
+def get_fractional_part(number: int | float | Fraction) -> int | float | Fraction:
     if number < 0:
         return number + math.ceil(abs(number))
     elif number == 1:

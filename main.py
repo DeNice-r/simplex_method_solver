@@ -12,7 +12,6 @@ x7 + x8 + x9 <= 280
 and x1,x2,x3,x4,x5,x6,x7,x8,x9 >= 0'''
 model = Model.from_string(input_string)
 model.solve()
-print('-' * 80)
 
 input_string = \
     '''MIN Z = 2x1 + 4x2 + 3x3 + 3x4 + 2x5 + 5x6 + 5x7 + 3x8 + 6x9
@@ -25,7 +24,6 @@ x7 + x8 + x9 <= 280
 and x1,x2,x3,x4,x5,x6,x7,x8,x9 >= 0'''
 model = Model.from_string(input_string)
 model.solve()
-print('-' * 80)
 
 input_string = \
     '''MAX Z = 1x1 + 1x2
@@ -34,7 +32,6 @@ input_string = \
 and x1, x2 >= 0'''
 model = Model.from_string(input_string)
 model.solve()
-print('-' * 80)
 
 input_string = \
     '''MAX Z = 3000x1 + 2000x2 + 5000x3 + 4000x4 + 6000x5
@@ -45,7 +42,6 @@ x2 >= 10
 and x1,x2,x3,x4,x5 >= 0'''
 model = Model.from_string(input_string)
 model.solve()
-print('-' * 80)
 
 input_string = \
     '''MAX Z = 8x1 + 6x2
@@ -55,9 +51,4 @@ and x1, x2 non-negative integers'''
 model = Model.from_string(input_string)
 model.solve()
 
-for table in model.json['tables']:
-    for row in table:
-        for column in row:
-            print(f'{str(column):^10}', end='')
-        print()
-    print('-' * 80)
+

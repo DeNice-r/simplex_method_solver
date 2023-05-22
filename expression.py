@@ -18,7 +18,7 @@ class Expression:
     def from_string(cls, string: str):
         return cls(*(Variable.from_string(x) for x in variable_re.findall(string)))
 
-    def evaluate(self, values: dict['Variable', int | float | Fraction]):
+    def evaluate(self, values: dict['Variable', int | float | Fraction]) -> int | float | Fraction:
         return sum(x.evaluate(values) for x in self.variables)
 
     def __add__(self, other):
@@ -50,7 +50,7 @@ class Expression:
     def __ge__(self, other):
         return Constraint(self, '>=', other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         a: int = 1
         s = ''
         for v in self.variables:
@@ -58,7 +58,7 @@ class Expression:
         return s
         # return ' + '.join([str(v) for v in self.variables])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
     def get_coefficient(self, variable: 'Variable') -> int | float | Fraction | ArtificialCoefficient | None:
@@ -72,13 +72,6 @@ class Expression:
             if v.name == variable.name and v.index == variable.index:
                 v.coefficient = value
                 return
-
-    def evaluate(self, values: dict[str, int | float | Fraction]) -> int | float | Fraction:
-        result = 0
-        for v in self.variables:
-            result += v.evaluate(values)
-        return result
-
 
 from variable import Variable
 from constraint import Constraint

@@ -31,7 +31,7 @@ class Constraint:
             float(right_str)
         )
 
-    def is_satisfied_by(self, values: dict[str, int | float | Fraction]):
+    def is_satisfied_by(self, values: dict[str, int | float | Fraction]) -> bool:
         return self.sign.compare(self.left.evaluate(values), self.right)
 
     def __add__(self, other: int | float | Fraction):
@@ -62,10 +62,10 @@ class Constraint:
     def __neg__(self):
         return self.__mul__(-1)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'{self.left} {self.sign} {self.right}'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
 

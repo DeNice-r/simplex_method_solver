@@ -79,7 +79,7 @@ class ArtificialCoefficient:
     def __ge__(self, other):
         return self.__gt__(other) or self.__eq__(other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.multiplier == 0 and self.constant == 0:
             return '0'
         m_part = f'{"-" if self.multiplier < 0 else ""}{abs(self.multiplier) if abs(self.multiplier) != 1 else ""}M'
@@ -90,5 +90,5 @@ class ArtificialCoefficient:
         else:
             return f'{m_part} {"-" if self.constant < 0 else "+"} {abs(self.constant)}'
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
