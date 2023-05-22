@@ -29,7 +29,7 @@ class Model:
         self.__highest_variable_index: int = max([x.index for x in self.target.variables])
         self.__basis: Dict[int, Variable] = {}
         self.__gomory_variables: List[Variable] = []
-
+        self.json: dict = {'tables': []}
 
     @classmethod
     def from_string(cls, string: str) -> 'Model':
@@ -333,6 +333,8 @@ class Model:
         self.__search_for_basis()
         self.__add_missing_variables()
 
+        self.__add_table_to_json()
+
         self.__choose_column = self.__gomory_choose_column
         self.__choose_row = self.__gomory_choose_row
 
@@ -344,19 +346,22 @@ class Model:
     def solve(self) -> None:
         # Convert existing model to canonical form
         self.__to_canonical_form()
-
+        self.json['tables'] = []
+        self.json['tables'].append(self.get_current_table())
         # Improve solution until we reach optimal solution
         # print(self)
         while self.get_status() is Status.UNSOLVED:
             self.__improve_solution()
-            # print(self)
-            # print(f'F(x) = {self.__get_function_value()}')
+            self.__add_table_to_json()
+
 
         while self.get_status() is Status.OPTIMAL and self.__get_integer_status() is Status.UNSOLVED:
             self.__gomory_cut()
+            self.__add_table_to_json()
 
             while any([x is not None for x in self.__get_gomory_deltas()]):
                 self.__improve_solution()
+                self.__add_table_to_json()
 
         # Print solution (to be removed)
         values = self.__get_x_values()
@@ -364,6 +369,22 @@ class Model:
             print(f'{variable} = {values[variable]}')
         print(f'F(x) = {self.__get_function_value()}')
         print(f'Status: {self.get_status()}')
+
+    def __add_table_to_json(self):
+        self.json['tables'].append(self.get_current_table())
+
+    def get_current_table(self) -> List[List[str]]:
+        r = [['']]
+        for variable in self.target.variables:
+            r[0].append(variable.coefficient)
+        for constraint in self.constraints:
+            r.append([])
+            r[-1].append(constraint.right)
+            for variable in constraint.left.variables:
+                r[-1].append(constraint.left.get_coefficient(variable))
+        r.append([f'F(x) = {self.__get_function_value()}'])
+
+        return r
 
     def __str__(self) -> str:
         return '\n'.join(

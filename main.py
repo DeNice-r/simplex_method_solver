@@ -54,3 +54,10 @@ input_string = \
 and x1, x2 non-negative integers'''
 model = Model.from_string(input_string)
 model.solve()
+
+for table in model.json['tables']:
+    for row in table:
+        for column in row:
+            print(f'{str(column):^10}', end='')
+        print()
+    print('-' * 80)
