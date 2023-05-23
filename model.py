@@ -85,10 +85,12 @@ class Model:
         self.__highest_variable_index += 1
 
     def __convert_constraints_to_equations(self) -> None:
-        for index, constraint in enumerate(self.constraints):
-            if constraint.sign == Sign.LE:
+        for index in range(len(self.constraints)):
+            if self.constraints[index].right < 0:
+                self.constraints[index] *= -1
+            if self.constraints[index].sign == Sign.LE:
                 coefficient = 1
-            elif constraint.sign == Sign.GE:
+            elif self.constraints[index].sign == Sign.GE:
                 coefficient = -1
             else:
                 continue
@@ -156,7 +158,7 @@ class Model:
         sums = self.__get_sums()
         return [sums[x] - self.target.variables[x].coefficient for x in range(len(sums))]
 
-    def __get_x_values(self) -> Dict[str, int | float | Fraction]:
+    def get_x_values(self) -> Dict[str, int | float | Fraction]:
         x_values = {}
         for variable in self.initial_target.variables:
             x_values[variable.coefless()] = 0
@@ -169,7 +171,7 @@ class Model:
     def __get_integer_status(self) -> Status:
         if not self.positive_integer_variables:
             return Status.OPTIMAL
-        values = self.__get_x_values()
+        values = self.get_x_values()
         for variable in self.positive_integer_variables:
             value = values[variable.coefless()]
             if not (value >= 0 and isclose(value, int(value))):
@@ -178,7 +180,7 @@ class Model:
 
     def __is_solution_viable(self) -> bool:
         viable = True
-        values = self.__get_x_values()
+        values = self.get_x_values()
         for constraint in self.initial_constraints:
             s = 0
             for variable in constraint.left.variables:
@@ -259,7 +261,7 @@ class Model:
         row_index = self.__choose_row(column_index)
         self.__recalculate_solution(row_index, column_index)
 
-    def __get_function_value(self) -> int | float | Fraction | ArtificialCoefficient:
+    def get_function_value(self) -> int | float | Fraction | ArtificialCoefficient:
         s = 0
         for index in self.__basis:
             s += self.target.get_coefficient(self.__basis[index]) * self.constraints[index].right
@@ -343,8 +345,7 @@ class Model:
     def solve(self) -> None:
         # Convert existing model to canonical form
         self.__to_canonical_form()
-        self.json['tables'] = []
-        self.json['tables'].append(self.get_current_table())
+        self.__add_table_to_json()
         # Improve solution until we reach optimal solution
         while self.get_status() is Status.UNSOLVED:
             self.__improve_solution()
@@ -367,36 +368,41 @@ class Model:
 
     def get_current_table(self) -> Dict[str, List[int | float | Fraction | None] | None | int | float | Fraction]:
         column = self.__choose_column()
-        row = column and self.__choose_row(column)
-        pivot = column and row and self.__get_pivot(row, column)
+        row = None if column is None else self.__choose_row(column)
+        pivot = None
+        try:
+            pivot = self.__get_pivot(column, row) if column is not None and row is not None else None
+        except IndexError:
+            pass
         r = {
-            'target': [variable.coefficient for variable in self.target.variables],
+            'target': [str(variable.coefficient) for variable in self.target.variables],
             'constraints': [],
-            'basis': [constraint.right for constraint in self.constraints],
+            'basis': [str(constraint.right) for constraint in self.constraints],
+            'basis_coefficients': [str(self.target.get_coefficient(variable)) for variable in self.__basis.values()],
             'variables': [variable.coefless() for variable in self.target.variables],
             'basis_variables': [variable.coefless() for variable in self.__basis.values()],
-            'sums': self.__get_sums(),
-            'deltas': self.__get_deltas(),
-            'gomory_deltas': [x if x else '---' for x in self.__get_gomory_deltas()] if self.gomory_state else None,
-            'function_value': self.__get_function_value(),
+            'sums': [str(x) for x in self.__get_sums()],
+            'deltas': [str(x) for x in self.__get_deltas()],
+            'gomory_deltas': [str(x) if x else '---' for x in self.__get_gomory_deltas()] if self.gomory_state else None,
+            'function_value': str(self.get_function_value()),
             'column': column,
             'row': row,
-            'pivot': pivot,
+            'pivot': str(pivot),
         }
 
         # Too complicated to be done in one line
         for constraint in self.constraints:
             r['constraints'].append([])
-            r['constraints'][-1].append(constraint.right)
             for variable in constraint.left.variables:
-                r['constraints'][-1].append(constraint.left.get_coefficient(variable))
+                r['constraints'][-1].append(str(constraint.left.get_coefficient(variable)))
         return r
 
     def __finalize_json(self) -> None:
-        self.json['status'] = self.get_status()
-        self.json['integer_status'] = self.__get_integer_status()
-        self.json['x_values'] = self.__get_x_values()
-        self.json['function_value'] = self.__get_function_value()
+        self.json['status'] = str(self.get_status())
+        self.json['integer_status'] = str(self.__get_integer_status())
+        x_values = self.get_x_values()
+        self.json['x_values'] = {x: str(x_values[x]) for x in x_values}
+        self.json['function_value'] = str(self.get_function_value())
 
     def print_json(self) -> None:
         for table in self.json['tables']:

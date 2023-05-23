@@ -54,6 +54,8 @@ class Constraint:
         for x in new_instance.left.variables:
             x.coefficient *= other
         new_instance.right *= other
+        if other < 0:
+            new_instance.sign = new_instance.sign.flipped()
         return new_instance
 
     def __truediv__(self, other: int | float | Fraction):

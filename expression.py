@@ -54,7 +54,7 @@ class Expression:
         a: int = 1
         s = ''
         for v in self.variables:
-            s += f'{str(v.coefficient):^10}'
+            s += f'{str(v):^10}'
         return s
         # return ' + '.join([str(v) for v in self.variables])
 

@@ -24,6 +24,13 @@ class Sign(Enum):
         else:
             raise ValueError(f'Unknown sign {self}')
 
+    def flipped(self):
+        if self is self.LE:
+            return Sign.GE
+        elif self is self.GE:
+            return Sign.LE
+        return self.EQ
+
     def __str__(self) -> str:
         return self.value
 
