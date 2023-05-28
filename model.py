@@ -398,6 +398,9 @@ class Model:
         return r
 
     def __finalize_json(self) -> None:
+        self.json['tables'][-1]['column'] = None
+        self.json['tables'][-1]['row'] = None
+        self.json['tables'][-1]['pivot'] = None
         self.json['status'] = str(self.get_status())
         self.json['integer_status'] = str(self.__get_integer_status())
         x_values = self.get_x_values()
