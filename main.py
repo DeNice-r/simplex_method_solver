@@ -1,5 +1,3 @@
-from asyncio import sleep
-
 from starlette.responses import JSONResponse
 
 from model import Model
