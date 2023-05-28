@@ -34,7 +34,7 @@ class ArtificialCoefficient:
         return NotImplemented
 
     def __rsub__(self, other):
-        return self.__sub__(other)
+        return (-self).__add__(other)
 
     def __truediv__(self, other):
         if isinstance(other, int | float | Fraction):
@@ -44,7 +44,7 @@ class ArtificialCoefficient:
         return NotImplemented
 
     def __rtruediv__(self, other):
-        return self.__truediv__(other)
+        return (1/self).__mul__(other)
 
     def __neg__(self):
         return ArtificialCoefficient(-self.multiplier, -self.constant)
@@ -60,6 +60,8 @@ class ArtificialCoefficient:
         return not self.__eq__(other)
 
     def __lt__(self, other):
+        if self.__eq__(other):
+            return False
         if isinstance(other, int | float | Fraction):
             if self.multiplier == 0:
                 return self.constant < other

@@ -142,19 +142,13 @@ class Model:
 
     def __get_sums(self) -> List[int | float | Fraction]:
         sums = []
-        for variables in self.target.variables:
+        for variable in self.target.variables:
             sums.append(0)
             for index, constraint in enumerate(self.constraints):
-                sums[-1] += constraint.left.get_coefficient(variables) * self.target.get_coefficient(self.__basis[index])
+                sums[-1] += constraint.left.get_coefficient(variable) * self.target.get_coefficient(self.__basis[index])
         return sums
 
     def __get_deltas(self) -> List[int | float | Fraction | ArtificialCoefficient]:
-        deltas = []
-        for variables in self.target.variables:
-            s = 0
-            for index, constraint in enumerate(self.constraints):
-                s += constraint.left.get_coefficient(variables) * self.target.get_coefficient(self.__basis[index])
-            deltas.append(s - variables.coefficient)
         sums = self.__get_sums()
         return [sums[x] - self.target.variables[x].coefficient for x in range(len(sums))]
 
@@ -208,7 +202,8 @@ class Model:
 
     def __choose_column(self) -> int:
         deltas = self.__get_deltas()
-        return deltas.index(min(deltas) if self.lptype is LpType.MAX else max(deltas))
+        mn = min(deltas) if self.lptype is LpType.MAX else max(deltas)
+        return deltas.index(mn)
 
     def __get_ratio(self, row_index: int, column_index: int) -> int | float | Fraction | None:
         xB = self.constraints[row_index].right
@@ -223,18 +218,22 @@ class Model:
 
     def __choose_row(self, column_index: int) -> int:
         mn, mn_index = None, None
-        for index in range(0, len(self.constraints)):
+        for index in range(len(self.constraints)):
             ratio = self.__get_ratio(index, column_index)
             if ratio is not None and (mn is None or ratio < mn):
                 mn, mn_index = ratio, index
 
         return mn_index
 
-    def __get_pivot(self, row_index: int, column_index: int) -> int | float | Fraction:
+    def __get_pivot(self, row_index: int, column_index: int) -> int | float | Fraction | None:
+        if row_index is None or column_index is None:
+            return None
         return self.constraints[row_index].left.get_coefficient(self.target.variables[column_index])
 
     def __recalculate_solution(self, row_index: int, column_index: int) -> None:
         pivot = self.__get_pivot(row_index, column_index)
+        if pivot is None:
+            return
         self.constraints[row_index] /= pivot
         for index, constraint in enumerate(self.constraints):
             if index == row_index:
@@ -264,6 +263,8 @@ class Model:
     def get_function_value(self) -> int | float | Fraction | ArtificialCoefficient:
         s = 0
         for index in self.__basis:
+            if self.target.get_coefficient(self.__basis[index]) is None:
+                continue
             s += self.target.get_coefficient(self.__basis[index]) * self.constraints[index].right
         return s
 
@@ -361,7 +362,7 @@ class Model:
                 self.__improve_solution()
                 self.__add_table_to_json()
 
-        self.__finalize_json()
+        self.finalize_json()
 
     def __add_table_to_json(self) -> None:
         self.json['tables'].append(self.get_current_table())
@@ -397,7 +398,7 @@ class Model:
                 r['constraints'][-1].append(str(constraint.left.get_coefficient(variable)))
         return r
 
-    def __finalize_json(self) -> None:
+    def finalize_json(self) -> None:
         self.json['tables'][-1]['column'] = None
         self.json['tables'][-1]['row'] = None
         self.json['tables'][-1]['pivot'] = None

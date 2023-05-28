@@ -63,7 +63,7 @@ class Expression:
 
     def get_coefficient(self, variable: 'Variable') -> int | float | Fraction | ArtificialCoefficient | None:
         for v in self.variables:
-            if v.name == variable.name and v.index == variable.index:
+            if v.coefless() == variable.coefless():
                 return v.coefficient
         return None
 
