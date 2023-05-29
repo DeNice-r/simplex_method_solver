@@ -75,7 +75,8 @@ class Model:
                 if constraint.left.get_coefficient(variable) is None:
                     constraint.left += Variable(0, variable.name, variable.index)
 
-    def __introduce_variable(self, coefficients: List[int | float | Fraction | ArtificialCoefficient], name: str, constraint_index: int) -> None:
+    def __introduce_variable(self, coefficients: List[int | float | Fraction | ArtificialCoefficient], name: str,
+                             constraint_index: int) -> None:
         index = self.__highest_variable_index + 1
         variables = Variable.create_many(coefficients, name, index)
         constraint = self.constraints[constraint_index]
@@ -272,8 +273,10 @@ class Model:
         deltas = self.__get_deltas()
         gomory_applicable_row = None
         for index, constraint in enumerate(self.constraints):
-            if constraint.right <= 0 and (gomory_applicable_row is None or self.constraints[gomory_applicable_row].right > constraint.right):
-                if constraint.right == 0 and self.__basis[index].coefless() in [x.coefless() for x in self.__gomory_variables]:
+            if constraint.right <= 0 and (
+                    gomory_applicable_row is None or self.constraints[gomory_applicable_row].right > constraint.right):
+                if constraint.right == 0 and self.__basis[index].coefless() in [x.coefless() for x in
+                                                                                self.__gomory_variables]:
                     continue
 
                 gomory_applicable_row = index
@@ -307,7 +310,8 @@ class Model:
     def __gomory_choose_row(self, column: int = None) -> int:
         mn_index = None
         for index in self.__basis:
-            if self.constraints[index].right <= 0 and (mn_index is None or self.constraints[index].right < self.constraints[mn_index].right):
+            if self.constraints[index].right <= 0 and (
+                    mn_index is None or self.constraints[index].right < self.constraints[mn_index].right):
                 mn_index = index
 
         return mn_index
@@ -315,13 +319,15 @@ class Model:
     def __gomory_cut(self) -> None:
         cut_row = None
         for index, variable in self.__basis.items():
-            if variable.coefless() not in [x.coefless() for x in self.initial_target.variables] or get_fractional_part(self.constraints[index].right) == 1:
+            if variable.coefless() not in [x.coefless() for x in self.initial_target.variables] or get_fractional_part(
+                    self.constraints[index].right) == 1:
                 continue
-            if (cut_row is None or get_fractional_part(self.constraints[cut_row].right) <  # variable.coefless() in [x.coefless() for x in self.positive_integer_variables] and \
-                     get_fractional_part(self.constraints[index].right)):
+            if (cut_row is None or get_fractional_part(self.constraints[cut_row].right) <
+                    get_fractional_part(self.constraints[index].right)):
                 cut_row = index
 
-        self.constraints.append(Constraint(Expression(), Sign.EQ, -get_fractional_part(self.constraints[cut_row].right)))
+        self.constraints.append(
+            Constraint(Expression(), Sign.EQ, -get_fractional_part(self.constraints[cut_row].right)))
         for variable in self.constraints[cut_row].left.variables:
             if variable.coefless() == self.__basis[cut_row].coefless():
                 # Add new variable
@@ -329,7 +335,8 @@ class Model:
                                           len(self.constraints) - 1)
                 self.__gomory_variables.append(self.target.variables[-1])
                 continue
-            self.constraints[-1].left.variables.append(Variable(-get_fractional_part(variable.coefficient), variable.name, variable.index))
+            self.constraints[-1].left.variables.append(
+                Variable(-get_fractional_part(variable.coefficient), variable.name, variable.index))
 
         self.__search_for_basis()
         self.__add_missing_variables()
@@ -352,12 +359,14 @@ class Model:
             self.__improve_solution()
             self.__add_table_to_json()
 
-
+        # If we have optimal solution, but it's not integer, while it has to be, we need to apply Gomory's cuts
         while self.get_status() is Status.OPTIMAL and self.__get_integer_status() is Status.UNSOLVED:
+            # Introduce new constraint along with new variable and optimize it
             self.gomory_state = True
             self.__gomory_cut()
             self.__add_table_to_json()
 
+            # Improve solution until we reach optimal solution
             while any([x is not None for x in self.__get_gomory_deltas()]):
                 self.__improve_solution()
                 self.__add_table_to_json()
@@ -384,7 +393,8 @@ class Model:
             'basis_variables': [variable.coefless() for variable in self.__basis.values()],
             'sums': [str(x) for x in self.__get_sums()],
             'deltas': [str(x) for x in self.__get_deltas()],
-            'gomory_deltas': [str(x) if x else '---' for x in self.__get_gomory_deltas()] if self.gomory_state else None,
+            'gomory_deltas': [str(x) if x else '---' for x in
+                              self.__get_gomory_deltas()] if self.gomory_state else None,
             'function_value': str(self.get_function_value()),
             'column': column,
             'row': row,
